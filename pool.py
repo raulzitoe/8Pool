@@ -1,65 +1,12 @@
 import pygame
 import pygame.gfxdraw
 import sys
-from math import *
-import cmath
-import random
-from network import Network
+from math import cos, sin, radians, degrees, atan2
+from cmath import polar
 import socket
 import pickle
-
-# Colors used
-BLACK = (0, 0, 0)
-WHITE = (255, 255, 255)
-BLUE = (0, 0, 255)
-GREEN = (0, 255, 0)
-RED = (255, 0, 0)
-GRAY = (127, 127, 127)
-
-COLOR_1 = (228, 165, 28)
-COLOR_2 = (3, 99, 177)
-COLOR_3 = (206, 34, 21)
-COLOR_4 = (139, 3, 122)
-COLOR_5 = (208, 123, 2)
-COLOR_6 = (4, 117, 34)
-COLOR_7 = (124, 60, 7)
-COLOR_8 = (0, 0, 0)
-COLOR_9 = (238, 191, 100)
-COLOR_10 = (3, 99, 177)
-COLOR_11 = (161, 18, 2)
-COLOR_12 = (127, 1, 63)
-COLOR_13 = (165, 96, 3)
-COLOR_14 = (4, 112, 30)
-COLOR_15 = (125, 61, 7)
-colors = (COLOR_1, COLOR_2, COLOR_3,
-            COLOR_4, COLOR_5, COLOR_6, COLOR_7, 
-            COLOR_8, COLOR_9, COLOR_10, COLOR_11, 
-            COLOR_12, COLOR_13, COLOR_14, COLOR_15)
-BX = 100
-BY = 180
-
-balls_pos = ((BX, BY), (BX, BY+22), (BX, BY+44), (BX, BY+66), (BX, BY+88),
-              (BX+19, BY+11), (BX+19, BY+33), (BX+19, BY+55), (BX+19, BY + 77),
-               (BX+38, BY+22), (BX+38, BY+44), (BX+38, BY+66),
-               (BX+57, BY+33), (BX+57, BY+55),
-               (BX+76, BY+44))
-
-MARGIN_TOP = 26
-MARGIN_BOTTOM = 27
-MARGIN_LEFT = 26
-MARGIN_RIGHT = 27
-WIDTH = 800
-MENU_HEIGHT = 50
-HEIGHT = 448 + MENU_HEIGHT
-LEFT_CLICK = 1
-RIGHT_CLICK = 3
-PLAYER1 = 1
-PLAYER2 = 2
-EVEN = 1
-ODD = 2
-
-background_img = pygame.image.load(r"C:\Users\raul-\Documents\Python projects\8Pool\table.png")
-stick_img = pygame.image.load(r"C:\Users\raul-\Documents\Python projects\8Pool\stick.png")
+import constants as c
+from random import randint
 
 
 class Game:
@@ -70,8 +17,8 @@ class Game:
         self.balls_put_odd = []
         self.balls.append(self.Ball((600, 220)))
         for x in range(15):
-            self.balls.append(self.Ball(balls_pos[x]))
-            self.balls[x+1].color = colors[x]
+            self.balls.append(self.Ball(c.BALLS_POS[x]))
+            self.balls[x+1].color = c.COLORS[x]
             self.balls[x+1].number = x+1
         self.stick = self.Stick()
         self.puts = []
@@ -81,30 +28,79 @@ class Game:
         self.puts.append(self.Put(32, 408))
         self.puts.append(self.Put(398, 420))
         self.puts.append(self.Put(765, 408))
-        self.turn = PLAYER1
-        self.p1 = 0
+        self.turn = c.PLAYER1
+        self.must_put = c.ANY
         self.first_put = False
+        self.after_hit = False
+        self.even_on_put = 0
+        self.odd_on_put = 0
+
+    def draw(self):
+        for ball in self.balls:
+            ball.move()
+            ball.draw()
+        for put in self.puts:
+            put.draw()
+            put.check_put(game)
+        if not self.has_movement(self.balls):
+            self.stick.draw(self.balls)
+
+    def check_victory(self):
+        is_15_ingame = False
+        for ball in self.balls:
+            if ball.number == 15:
+                is_15_ingame = True
+        if len(self.balls_put_even) == 7 and not is_15_ingame:
+            if game.turn == c.PLAYER1:
+                return c.PLAYER1
+            else:
+                return c.PLAYER2
+        elif len(self.balls_put_odd) == 8:
+            if game.turn == c.PLAYER1:
+                return c.PLAYER1
+            else:
+                return c.PLAYER2
+        elif (not is_15_ingame) and len(self.balls_put_even) < 7 and len(self.balls_put_odd) < 8:
+            if game.turn == c.PLAYER1:
+                return c.PLAYER2
+            else:
+                return c.PLAYER1
+        return False
+    
+    def click_handle(self, event):
+        
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if not self.has_movement(self.balls) and event.button == c.LEFT_CLICK:
+                self.stick.is_charging = True
+                
+
+        elif event.type == pygame.MOUSEBUTTONUP:
+            if not game.has_movement(game.balls) and event.button == c.LEFT_CLICK:
+                self.stick.is_charging = False
+                self.stick.hit = True
+                self.stick.hit_force = (game.stick.dist_to_ball - 180) * 0.25
+            if not game.has_movement(game.balls) and event.button == c.RIGHT_CLICK:
+                self.stick.dist_to_ball = 180
 
     def toggle_turn(self):
-        if self.turn == PLAYER1:
-            self.turn = PLAYER2
+        if self.turn == c.PLAYER1:
+            self.turn = c.PLAYER2
         else:
-            self.turn = PLAYER1
+            self.turn = c.PLAYER1
+        if self.must_put == c.EVEN:
+            self.must_put = c.ODD
+        elif self.must_put == c.ODD:
+            self.must_put = c.EVEN
 
     def set_player_ball(self):
         if not self.first_put:
             if self.balls_put_even:
+                self.must_put = c.EVEN
                 self.first_put = True
-                if self.turn == PLAYER1:
-                    self.p1 = EVEN
-                else:
-                    self.p1 = ODD
+                
             if self.balls_put_odd:
+                self.must_put = c.ODD
                 self.first_put = True
-                if self.turn == PLAYER1:
-                    self.p1 = ODD
-                else:
-                    self.p1 = EVEN
 
     def has_movement(self, objs):
         for obj in objs:
@@ -115,12 +111,20 @@ class Game:
             self.balls[0].y = 220
         return False
 
-    
-
     def check_collisions(self):
         for a in self.balls:
             for b in self.balls:
                 if a is not b and ball_collided(a, b) and not a.collided and not b.collided:             
+                    x = randint(1, 3)
+                    if x==1:
+                        hit_sound1.play()
+                        print("Sound 1")
+                    elif x==2:
+                        hit_sound2.play()
+                        print("Sound 2")
+                    else:
+                        hit_sound3.play()
+                        print("Sound 3")
                     a.collided = True
                     b.collided = True
 
@@ -132,12 +136,12 @@ class Game:
                     d = ((v1 - v2) / p12).real * p12
 
                     pa = v1 - d
-                    polar_a = cmath.polar(pa)
+                    polar_a = polar(pa)
                     a.velocity = polar_a[0]
                     a.angle = degrees(polar_a[1])
 
                     pb = v2 + d
-                    polar_b = cmath.polar(pb)
+                    polar_b = polar(pb)
                     b.velocity = polar_b[0]
                     b.angle = degrees(polar_b[1])
                     
@@ -163,7 +167,7 @@ class Game:
             self.velocity = 0.0
             self.angle = 0
             self.radius = 10
-            self.color = WHITE
+            self.color = c.WHITE
             self.collided = False
             self.number = number
 
@@ -171,14 +175,11 @@ class Game:
             self.velocity = force
             self.angle = angle
 
-        def move(self):
-            self.x = self.x + self.velocity*cos(radians(self.angle))
-            self.y = self.y + self.velocity*sin(radians(self.angle))
+        def draw(self):
             #pygame.draw.circle(screen, self.color, (int(self.x), int(self.y)), self.radius)
             pygame.gfxdraw.filled_circle(screen, int(self.x), int(self.y), self.radius, self.color)
             pygame.gfxdraw.aacircle(screen, int(self.x), int(self.y), self.radius, self.color)
-            
-            text = font.render(str(self.number), True, WHITE)
+            text = font.render(str(self.number), True, c.WHITE)
             xoff = 5
             yoff = 4
             if self.number < 10:
@@ -186,17 +187,20 @@ class Game:
             if self.number != 0:
                 screen.blit(text, (int(self.x) - xoff, int(self.y) - yoff))
 
-            if self.x > (WIDTH - MARGIN_RIGHT) - self.radius:
-                self.x = (WIDTH - MARGIN_RIGHT) - self.radius
+        def move(self):
+            self.x = self.x + self.velocity*cos(radians(self.angle))
+            self.y = self.y + self.velocity*sin(radians(self.angle))
+            if self.x > (c.WIDTH - c.MARGIN_RIGHT) - self.radius:
+                self.x = (c.WIDTH - c.MARGIN_RIGHT) - self.radius
                 self.angle = 180 - self.angle
-            if self.x < self.radius + MARGIN_LEFT:
-                self.x = self.radius + MARGIN_LEFT
+            if self.x < self.radius + c.MARGIN_LEFT:
+                self.x = self.radius + c.MARGIN_LEFT
                 self.angle = 180 - self.angle
-            if self.y > HEIGHT - MARGIN_BOTTOM - self.radius - MENU_HEIGHT:
-                self.y = HEIGHT - MARGIN_BOTTOM - self.radius - MENU_HEIGHT
+            if self.y > c.HEIGHT - c.MARGIN_BOTTOM - self.radius - c.MENU_HEIGHT:
+                self.y = c.HEIGHT - c.MARGIN_BOTTOM - self.radius - c.MENU_HEIGHT
                 self.angle = 360 - self.angle
-            if self.y < self.radius + MARGIN_TOP:
-                self.y = self.radius + MARGIN_TOP
+            if self.y < self.radius + c.MARGIN_TOP:
+                self.y = self.radius + c.MARGIN_TOP
                 self.angle = 360 - self.angle
 
             self.velocity -= self.friction
@@ -208,7 +212,7 @@ class Game:
             self.y = y
             pygame.gfxdraw.filled_circle(screen, int(self.x), int(self.y), self.radius, self.color)
             pygame.gfxdraw.aacircle(screen, int(self.x), int(self.y), self.radius, self.color)
-            text = font.render(str(self.number), True, WHITE)
+            text = font.render(str(self.number), True, c.WHITE)
             xoff = 5
             yoff = 4
             if self.number < 10:
@@ -222,30 +226,46 @@ class Game:
         def __init__(self, x, y, r=16):
             self.x = x
             self.y = y
-            self.color = WHITE
+            self.color = c.WHITE
             self.radius = r
-        
+            
         def draw(self):
             #pygame.gfxdraw.filled_circle(screen, int(self.x), int(self.y), self.radius, self.color)
             #pygame.gfxdraw.aacircle(screen, int(self.x), int(self.y), self.radius, self.color)
             pass
         
-        def check_put(self, balls, balls_put_even, balls_put_odd):
-            for ball in balls:
-                distance = calc_distance(ball, self)
-                if distance < self.radius:
-                    if ball == balls[0]:
-                        #ball.x = 600
-                        #ball.y = 220
-                        ball.x = -200
-                        ball.y = -200
-                        ball.velocity = 0
-                    else:
-                        balls.remove(ball)
-                        if ball.number % 2 == 0:
-                            balls_put_even.append(ball)
+        def check_put(self, game):
+            if not menu.is_connected:
+                for ball in game.balls:
+                    distance = calc_distance(ball, self)
+                    if distance < self.radius:
+                        if ball == game.balls[0]:
+                            ball.x = -200
+                            ball.y = -200
+                            ball.velocity = 0
+                            game.toggle_turn()
+                            game.after_hit = False
+                            game.even_on_put = len(game.balls_put_even)
+                            game.odd_on_put = len(game.balls_put_odd)
                         else:
-                            balls_put_odd.append(ball)
+                            game.balls.remove(ball)
+                            pocket_sound.play()
+                            if ball.number % 2 == 0:
+                                game.balls_put_even.append(ball)
+                            else:
+                                game.balls_put_odd.append(ball)
+                if game.after_hit and not game.has_movement(game.balls):
+                    game.after_hit = False
+                    if (game.even_on_put == len(game.balls_put_even) and
+                        game.odd_on_put == len(game.balls_put_odd)):
+                        game.toggle_turn()
+                    elif game.must_put == c.EVEN and game.odd_on_put < len(game.balls_put_odd):
+                        game.toggle_turn()
+                    elif game.must_put == c.ODD and game.even_on_put < len(game.balls_put_even):
+                        game.toggle_turn()
+                    game.even_on_put = len(game.balls_put_even)
+                    game.odd_on_put = len(game.balls_put_odd)
+               
 
 
     class Stick:
@@ -262,15 +282,19 @@ class Game:
             self.is_charging = False
             self.hit = False
             self.hit_force = 0
+            self.remote_hit = False
 
-        def set_angle(self, ball_obj):
-            position = pygame.mouse.get_pos()
-            #print(position)
+        def set_angle(self, ball_obj, pos=(-100, -100)):
+            if pos[0] == -100:
+                position = pygame.mouse.get_pos()
+            else:
+                position = pos
+            
             self.x = position[0]
             self.y = position[1]
             self.angle = degrees(atan2(ball_obj.y - self.y ,  ball_obj.x - self.x))
 
-        def update(self, balls):
+        def draw(self, balls):
             if self.is_charging:
                 self.dist_to_ball += 0.5
                 if self.dist_to_ball > 250:
@@ -281,7 +305,13 @@ class Game:
                     self.dist_to_ball = 180      
             if self.hit and self.dist_to_ball == 180:
                 self.hit = False
-                balls[0].set_force_angle(self.hit_force, self.angle)
+                if not menu.is_hosting or game.turn == c.PLAYER1:
+                    balls[0].set_force_angle(self.hit_force, self.angle)
+                    hit_cue_sound.play()
+                    game.after_hit = True
+                if menu.is_connected and game.turn == c.PLAYER2:
+                    self.remote_hit = True
+                
             self.image = pygame.transform.rotate(self.original_image, -self.angle - 90)
             x, y = self.rect.center
             self.rect = self.image.get_rect()
@@ -314,6 +344,7 @@ def fix_overlap(ball1, ball2):
                 ball1.y -= 0.1
             distance = calc_distance(ball1, ball2)
 
+
 class Button:
 
         def __init__(self, x, y, width, height, text, xoff=0, yoff=0):
@@ -321,14 +352,15 @@ class Button:
             self.y = y
             self.height = height
             self.width = width
-            self.background = WHITE
+            self.background = c.WHITE
             self.text = text
             self.x_offset = xoff
             self.y_offset = yoff
 
         def draw(self, surface):
-            pygame.draw.ellipse(surface, self.background, [self.x, self.y, self.width, self.height], 0)
-            text = font.render(self.text, True, BLACK)     
+            pygame.draw.rect(surface, self.background, [self.x, self.y, self.width, self.height], 0)
+            pygame.draw.rect(surface, c.BLACK, [self.x, self.y, self.width, self.height], 1)
+            text = font.render(self.text, True, c.BLACK)     
             surface.blit(text, (self.x + self.x_offset, self.y + self.y_offset))
         
         def click_handle(self):
@@ -345,127 +377,186 @@ class Label:
             self.y = y
             self.text = text
         
-        def show(self, surface, text): 
-            tmp = font.render(text, True, BLACK)     
+        def show(self, surface, text, ): 
+            tmp = font_medium.render(text, True, c.BLACK)     
             surface.blit(tmp, (self.x, self.y))
 
-conn = None
-client_socket = None
 
+class Menu:
+    
+    def __init__(self):
+        self.btn_host = Button(30, 450, 60, 40, "Host", 18, 15)
+        self.btn_connect = Button(100, 450, 60, 40, "Connect", 10, 15)
+        self.btn_host.background = c.GREEN
+        self.is_hosting = False
+        self.btn_connect.background = c.GREEN
+        self.is_connected = False
+        self.lbl_player = Label(200, 460, "")
+        self.won = 0
+
+    def draw(self, game):
+        self.btn_host.draw(screen)
+        self.btn_connect.draw(screen)
+        winner = False
+        text = ""
+        if game.must_put == c.EVEN:
+            ball_type = "EVEN"
+        elif game.must_put == c.ODD:
+            ball_type = "ODD"
+        else:
+            ball_type = "ANY"
+        if not self.won:
+            text = "Player {} Turn ({})".format(game.turn, ball_type)
+            self.won = game.check_victory()
+        if self.won:
+            text = "Player {} won the game!".format(self.won)
+        self.lbl_player.show(screen, text)
+
+    def click_handle(self):
+        if self.btn_host.click_handle():
+            print("Button Host Click")
+            self.is_hosting = True
+            self.btn_host.background = c.RED
+            host()
+        if self.btn_connect.click_handle():
+            print("Button Connect Click")
+            self.is_connected = True
+            self.btn_connect.background = c.RED
+            client()
 
 def host():
     # get the hostname
     host = socket.gethostname()
-    port = 5000  # initiate port no above 1024
+    port = PORT
+    SERVER_IP = socket.gethostbyname(host)
 
-    server_socket = socket.socket()  # get instance
-    # look closely. The bind() function takes tuple as argument
-    server_socket.bind((host, port))  # bind host address and port together
+    server_socket = socket.socket()  
+    server_socket.bind((host, port))
+    print("Server on IP: {} and PORT: {}".format(SERVER_IP, port))
 
     # configure how many client the server can listen simultaneously
     server_socket.listen(2)
     global conn
-    conn, address = server_socket.accept()  # accept new connection
+    conn, address = server_socket.accept()
     print("Connection from: " + str(address))
 
 def client():
-    host = socket.gethostname()  # as both code is running on same pc
-    port = 5000  # socket server port number
+    host = IP
+    port = PORT
     global client_socket
-    client_socket = socket.socket()  # instantiate
-    client_socket.connect((host, port))  # connect to the server
+    client_socket = socket.socket() 
+    client_socket.connect((host, port))
 
 
-# Initialize pygame and sets screen size and caption
+background_img = pygame.image.load(r"table.png")
+stick_img = pygame.image.load(r"stick.png")
+
+
+f = open("ip_port_to_connect.txt", "r")
+IP, PORT = f.read().splitlines()
+PORT = int(PORT)
+f.close()
+print(IP)
+print(PORT)
+
+conn = None
+client_socket = None
 pygame.init()
-# Font to use in the entire game
 font = pygame.font.Font('freesansbold.ttf', 10)
-size = (WIDTH, HEIGHT)
-screen = pygame.display.set_mode(size, pygame.RESIZABLE)
-pygame.display.set_caption("8 Ball Pool by Raul Vieira")
+font_medium = pygame.font.Font('freesansbold.ttf', 16)
+screen = pygame.display.set_mode((c.WIDTH, c.HEIGHT))
+pygame.display.set_caption("Pool Billiards by Raul Vieira")
+hit_sound1 = pygame.mixer.Sound(r"hit1.wav")
+hit_sound2 = pygame.mixer.Sound(r"hit2.wav")
+hit_sound3 = pygame.mixer.Sound(r"hit3.wav")
+pocket_sound = pygame.mixer.Sound(r"pocket.wav")
+hit_cue_sound = pygame.mixer.Sound(r"hit_cue.wav")
 
 game = Game()
-btn_host = Button(30, 450, 60, 50, "Host", 10, 20)
-btn_connect = Button(100, 450, 60, 50, "Connect", 10, 20)
-btn_host.background = GREEN
-btn_connect.background = GREEN
-server = Network()
-lbl_player = Label(200, 470, "")
+menu = Menu()
+
 
 clock = pygame.time.Clock()
-connected = False
-hosting = False
 
 # Main loop
 while True:
-    screen.fill(WHITE)
+    screen.fill(c.WHITE)
     screen.blit(background_img, (0, 0))
     for event in pygame.event.get():
-        # Closes the game if user clicked the X
+        if not menu.won:
+            game.click_handle(event)
         if event.type == pygame.QUIT:  
             pygame.quit()
-            if hosting:
+            if menu.is_hosting:
                 conn.close()
-            else:
+            elif menu.is_connected:
                 client_socket.disconnect()
             sys.exit()
         elif event.type == pygame.MOUSEBUTTONDOWN:
-            if not game.has_movement(game.balls) and event.button == LEFT_CLICK:
-                game.stick.is_charging = True
-            if btn_host.click_handle():
-                print("Button Host Click")
-                host()
-                hosting = True
-            if btn_connect.click_handle():
-                print("Button Connect Click")
-                client()
-                connected = True
-
-        elif event.type == pygame.MOUSEBUTTONUP:
-            if not game.has_movement(game.balls) and event.button == LEFT_CLICK:
-                game.stick.is_charging = False
-                game.stick.hit = True
-                game.stick.hit_force = (game.stick.dist_to_ball - 180) * 0.25
-            if not game.has_movement(game.balls) and event.button == RIGHT_CLICK:
-                game.stick.dist_to_ball = 180
-    for ball in game.balls:
-        ball.move()
-    for put in game.puts:
-        put.draw()
-        put.check_put(game.balls, game.balls_put_even, game.balls_put_odd)
-    if not connected:
+            menu.click_handle()
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_r:
+                game = Game()
+        
+    
+    game.set_player_ball()
+    
+    if not menu.is_connected:
         game.check_collisions()
     game.draw_balls_put()
-    game.stick.set_angle(game.balls[0])
-    if not game.has_movement(game.balls):
-        game.stick.update(game.balls)
-        game.set_player_ball()
-    btn_host.draw(screen)
-    btn_connect.draw(screen)
-    if game.p1 == EVEN:
-        ball_type = "EVEN"
-    elif game.p1 == ODD:
-        ball_type = "ODD"
-    else:
-        ball_type = "ANY"
-    text = "Player {} Turn ({})".format(game.turn, ball_type)
-    lbl_player.show(screen, text)
-    if connected:
+    if (not menu.is_connected and not menu.is_hosting) or (menu.is_hosting and game.turn == c.PLAYER1) or (menu.is_connected and game.turn == c.PLAYER2):
+        game.stick.set_angle(game.balls[0])
+    
+    game.draw()
+    menu.draw(game)
+    if menu.is_connected:
         try:
             data = client_socket.recv(4096)
             if data:
-                balls_host, balls_host_even, balls_host_odd = pickle.loads(data)
+                #mouse_pos = pygame.mouse.get_pos()
+                balls_host, balls_host_even, balls_host_odd, mouse_pos, turn, put_type = pickle.loads(data)
                 # for ball, ball_remote in zip(game.balls, balls_host):
                 #     ball.x = ball_remote.x
                 #     ball.y = ball_remote.y
                 game.balls = balls_host.copy()
                 game.balls_put_even = balls_host_even.copy()
                 game.balls_put_odd = balls_host_odd.copy()
+                if game.turn == c.PLAYER1:
+                    game.stick.set_angle(game.balls[0], mouse_pos)
+                game.turn = turn
+                game.must_put = put_type
+
+                force, angle = 0, 0
+                if game.stick.remote_hit:
+                    game.stick.remote_hit = False
+                    force = game.stick.hit_force
+                    angle = game.stick.angle
+                mouse_pos = pygame.mouse.get_pos()
+                data = pickle.dumps((force, angle, mouse_pos))
+                client_socket.send(data)
+
         except Exception as e:
             print(e)
-    if hosting:
-        data = pickle.dumps((game.balls, game.balls_put_even, game.balls_put_odd))
-        conn.send(data)  # send data to the client
+    if menu.is_hosting:
+        mouse_pos = pygame.mouse.get_pos()
+        data = pickle.dumps((game.balls, game.balls_put_even, game.balls_put_odd, mouse_pos, game.turn, game.must_put))
+        if game.turn == c.PLAYER2:
+            pass
+
+        conn.send(data)
+        try: 
+            data = conn.recv(4096)
+            if data:
+                force, angle, mouse_pos = pickle.loads(data)
+                if force:
+                    game.balls[0].set_force_angle(force, angle)
+                    hit_cue_sound.play()
+                    game.stick.hit = False
+                    game.after_hit = True
+                if game.turn == c.PLAYER2:
+                    game.stick.set_angle(game.balls[0], mouse_pos)
+        except Exception as e:
+            print(e)
     
 
     clock.tick(60)
