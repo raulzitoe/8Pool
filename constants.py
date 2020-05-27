@@ -1,0 +1,50 @@
+# Colors used
+BLACK = (0, 0, 0)
+WHITE = (255, 255, 255)
+BLUE = (0, 0, 255)
+GREEN = (0, 255, 0)
+RED = (255, 0, 0)
+GRAY = (127, 127, 127)
+
+COLOR_1 = (228, 165, 28)
+COLOR_2 = (3, 99, 177)
+COLOR_3 = (206, 34, 21)
+COLOR_4 = (139, 3, 122)
+COLOR_5 = (208, 123, 2)
+COLOR_6 = (4, 117, 34)
+COLOR_7 = (124, 60, 7)
+COLOR_8 = (0, 0, 0)
+COLOR_9 = (238, 191, 100)
+COLOR_10 = (3, 99, 177)
+COLOR_11 = (161, 18, 2)
+COLOR_12 = (127, 1, 63)
+COLOR_13 = (165, 96, 3)
+COLOR_14 = (4, 112, 30)
+COLOR_15 = (125, 61, 7)
+COLORS = (COLOR_1, COLOR_2, COLOR_3,
+            COLOR_4, COLOR_5, COLOR_6, COLOR_7, 
+            COLOR_8, COLOR_9, COLOR_10, COLOR_11, 
+            COLOR_12, COLOR_13, COLOR_14, COLOR_15)
+BX = 100
+BY = 180
+
+BALLS_POS = ((BX, BY), (BX, BY+22), (BX, BY+44), (BX, BY+66), (BX, BY+88),
+              (BX+19, BY+11), (BX+19, BY+33), (BX+19, BY+55), (BX+19, BY + 77),
+               (BX+38, BY+22), (BX+38, BY+44), (BX+38, BY+66),
+               (BX+57, BY+33), (BX+57, BY+55),
+               (BX+76, BY+44))
+
+MARGIN_TOP = 26
+MARGIN_BOTTOM = 27
+MARGIN_LEFT = 26
+MARGIN_RIGHT = 27
+WIDTH = 800
+MENU_HEIGHT = 50
+HEIGHT = 448 + MENU_HEIGHT
+LEFT_CLICK = 1
+RIGHT_CLICK = 3
+PLAYER1 = 1
+PLAYER2 = 2
+ANY = 0
+EVEN = 1
+ODD = 2
