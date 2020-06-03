@@ -481,7 +481,7 @@ def host():
     port = PORT
     SERVER_IP = socket.gethostbyname(host)
 
-    server_socket = socket.socket()  
+    server_socket = socket.socket()
     server_socket.bind((host, port))
     print("Server on IP: {} and PORT: {}".format(SERVER_IP, port))
 
@@ -498,6 +498,7 @@ def client():
     global client_socket
     client_socket = socket.socket() 
     client_socket.connect((host, port))
+    client_socket.setblocking(0)
 
 
 
@@ -566,7 +567,7 @@ while True:
     
     if game.menu.is_connected:
         try:
-            data = client_socket.recv(4096)
+            data = client_socket.recv(2048)
             if data:
                 balls_host, balls_host_even, balls_host_odd, mouse_pos, turn, pocket_type = pickle.loads(data)
                 game.balls = balls_host.copy()
