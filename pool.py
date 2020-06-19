@@ -40,11 +40,15 @@ class Game:
         self.sound_effect_count = 0
         self.cue_on_pocket = False
         self.sounds_end = False
+        self.acknowledge = False
+        self.remote_force = 0
+        self.remote_angle = 0
 
     # Draw the background, balls, pockets and stick on the screen
     def draw(self):
         for ball in self.balls:
-            ball.move()
+            if not self.menu.is_connected:
+                ball.move()
             ball.draw()
         for pocket in self.pockets:
             pocket.draw()
@@ -489,6 +493,7 @@ def host():
     server_socket.listen(2)
     global conn
     conn, address = server_socket.accept()
+    conn.setblocking(0)
     print("Connection from: " + str(address))
 
 
@@ -530,6 +535,7 @@ victory_sound = pygame.mixer.Sound(r"assets/victory.wav")
 game = Game()
 
 clock = pygame.time.Clock()
+old_time = 0
 
 # Main loop
 while True:
@@ -562,14 +568,16 @@ while True:
     game.draw_balls_pocket()
     if (not game.menu.is_connected and not game.menu.is_hosting) or (game.menu.is_hosting and game.turn == c.PLAYER1) or (game.menu.is_connected and game.turn == c.PLAYER2):
         game.stick.set_angle(game.balls[0])
-    game.draw()
-    game.sound_effects()
+    time_now = pygame.time.get_ticks()
+    if  time_now > old_time + 8:
+        game.draw()
+        game.sound_effects()
     
     if game.menu.is_connected:
         try:
-            data = client_socket.recv(2048)
+            data = client_socket.recv(4096)
             if data:
-                balls_host, balls_host_even, balls_host_odd, mouse_pos, turn, pocket_type = pickle.loads(data)
+                balls_host, balls_host_even, balls_host_odd, mouse_pos, turn, pocket_type, ack = pickle.loads(data)
                 game.balls = balls_host.copy()
                 game.balls_pocket_even = balls_host_even.copy()
                 game.balls_pocket_odd = balls_host_odd.copy()
@@ -577,33 +585,43 @@ while True:
                     game.stick.set_angle(game.balls[0], mouse_pos)
                 game.turn = turn
                 game.must_pocket = pocket_type
-                force, angle = 0, 0
+                if ack:
+                    game.remote_force = 0
+                    game.remote_angle = 0
                 if game.stick.remote_hit:
                     game.stick.remote_hit = False
-                    force = game.stick.hit_force
-                    angle = game.stick.angle
+                    game.remote_force = game.stick.hit_force
+                    game.remote_angle = game.stick.angle
+                    print("Remote hit sent with force {} and angle {}".format(game.remote_force, game.remote_angle))
                 mouse_pos = pygame.mouse.get_pos()
-                data = pickle.dumps((force, angle, mouse_pos))
+                data = pickle.dumps((game.remote_force, game.remote_angle, mouse_pos))
                 client_socket.send(data)
         except Exception as e:
-            print(e)
+            #print(e)
+            pass
 
     if game.menu.is_hosting:
         mouse_pos = pygame.mouse.get_pos()
-        data = pickle.dumps((game.balls, game.balls_pocket_even, game.balls_pocket_odd, mouse_pos, game.turn, game.must_pocket))
-        conn.send(data)
-        try: 
+        data = pickle.dumps((game.balls, game.balls_pocket_even, game.balls_pocket_odd, mouse_pos, game.turn, game.must_pocket, game.acknowledge))
+        try:
+            conn.send(data)
             data = conn.recv(4096)
             if data:
                 force, angle, mouse_pos = pickle.loads(data)
-                if force:
+                if force and game.turn == c.PLAYER2 and not game.has_movement(game.balls):
                     game.balls[0].set_force_angle(force, angle)
                     game.stick.hit = False
                     game.after_hit = True
+                    game.acknowledge = True
+                else:
+                    game.acknowledge = False
                 if game.turn == c.PLAYER2:
                     game.stick.set_angle(game.balls[0], mouse_pos)
         except Exception as e:
-            print(e)
-    clock.tick(120)
+            #print(e)
+            pass
+    clock.tick()
     # Update the screen
-    pygame.display.flip()
+    if  time_now > old_time + 8:
+        old_time = time_now
+        pygame.display.flip()
